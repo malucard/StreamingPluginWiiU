@@ -27,10 +27,12 @@
 #include <utils/logger.h>
 #include "MJPEGStreamServerUDP.hpp"
 
-#define ENCODE_QUEUE_MESSAGE_COUNT 1
+#define ENCODE_QUEUE_MESSAGE_COUNT 32
 
 extern OSMessageQueue encodeQueue;
+extern OSMessageQueue encodeQueue2;
 extern OSMessage encodeQueueMessages[ENCODE_QUEUE_MESSAGE_COUNT];
+extern OSMessage encodeQueue2Messages[ENCODE_QUEUE_MESSAGE_COUNT];
 
 
 class EncodingHelper {
@@ -59,7 +61,7 @@ public:
         if(!OSSendMessage(&encodeQueue,&message,OS_MESSAGE_FLAGS_NONE)) {
             //DEBUG_FUNCTION_LINE("Dropping frame\n");
             return false;
-        };
+        }
         return true;
     }
 
@@ -90,7 +92,7 @@ private:
     static void DoAsyncThread(CThread *thread, void *arg);
 
 
-    void DoAsyncThreadInternal(CThread *thread);
+    void DoAsyncThreadInternal(CThread *thread, bool is_second);
 
     CThread *pThread;
 

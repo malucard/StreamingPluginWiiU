@@ -29,7 +29,9 @@
 EncodingHelper *EncodingHelper::instance = NULL;
 
 OSMessageQueue encodeQueue __attribute__((section(".data")));
+OSMessageQueue encodeQueue2 __attribute__((section(".data")));
 OSMessage encodeQueueMessages[ENCODE_QUEUE_MESSAGE_COUNT] __attribute__((section(".data")));
+OSMessage encodeQueue2Messages[ENCODE_QUEUE_MESSAGE_COUNT] __attribute__((section(".data")));
 
 void EncodingHelper::StartAsyncThread() {
     int32_t priority = gEncodePriority;
@@ -39,7 +41,7 @@ void EncodingHelper::StartAsyncThread() {
 
 void EncodingHelper::DoAsyncThread(CThread *thread, void *arg) {
     EncodingHelper * arg_instance = (EncodingHelper *) arg;
-    return arg_instance->DoAsyncThreadInternal(thread);
+    return arg_instance->DoAsyncThreadInternal(thread, false);
 }
 
 
@@ -64,7 +66,7 @@ JpegInformation * convertToJpeg(uint8_t * sourceBuffer, uint32_t width, uint32_t
 
     int jpegQual = quality;
     int nbands = 4;
-    int flags = 0;
+    int flags = TJFLAG_FASTDCT;
     unsigned char* jpegBuf = NULL;
 
     int pixelFormat = TJPF_GRAY;
@@ -87,7 +89,7 @@ JpegInformation * convertToJpeg(uint8_t * sourceBuffer, uint32_t width, uint32_t
     return NULL;
 }
 extern int32_t curQuality;
-void EncodingHelper::DoAsyncThreadInternal(CThread *thread) {
+void EncodingHelper::DoAsyncThreadInternal(CThread *thread, bool is_second) {
     serverRunning = true;
 
     OSMessage message;
@@ -95,13 +97,13 @@ void EncodingHelper::DoAsyncThreadInternal(CThread *thread) {
     shouldExit = false;
     while(true) {
         //DEBUG_FUNCTION_LINE("Waiting for message in EncoderHelper\n");
-        if(!OSReceiveMessage(&encodeQueue,&message,OS_MESSAGE_FLAGS_NONE)) {
+        if(!OSReceiveMessage(is_second? &encodeQueue2: &encodeQueue,&message,OS_MESSAGE_FLAGS_NONE)) {
             //DEBUG_FUNCTION_LINE("... %08X\n",this->shouldExit);
             if(this->shouldExit) {
                 DEBUG_FUNCTION_LINE("We should stop\n");
                 break;
             }
-            OSSleepTicks(OSMicrosecondsToTicks(500));
+            //OSSleepTicks(OSMicrosecondsToTicks(500));
             continue;
         }
         DCFlushRange(&message,sizeof(OSMessage));
@@ -113,7 +115,6 @@ void EncodingHelper::DoAsyncThreadInternal(CThread *thread) {
         }
 
         colorBuffer = (GX2ColorBuffer *) message.args[1];
-
         JpegInformation * info = convertToJpeg((uint8_t*) colorBuffer->surface.image,colorBuffer->surface.width,colorBuffer->surface.height,colorBuffer->surface.pitch,colorBuffer->surface.format, curQuality);
 
         if(info != NULL ) {
@@ -123,12 +124,7 @@ void EncodingHelper::DoAsyncThreadInternal(CThread *thread) {
         }
 
         //DEBUG_FUNCTION_LINE("We can now kill the colorBuffer\n",colorBuffer);
-        if(colorBuffer->surface.image != NULL) {
-            free(colorBuffer->surface.image);
-            colorBuffer->surface.image = NULL;
-            //DEBUG_FUNCTION_LINE("Free image data for %08X\n",colorBuffer);
-        }
-        free(colorBuffer);
+        free_buf(colorBuffer);
         colorBuffer = NULL;
         //DEBUG_FUNCTION_LINE("Encoding Done.\n");
     }

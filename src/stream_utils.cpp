@@ -22,9 +22,156 @@ GX2ResolveAAColorBuffer(const GX2ColorBuffer * srcColorBuffer,
 }
 #endif
 
+uint8_t* img_heap = NULL;
+static bool img_used[P120_IMGS];
+static int alloc_fails = 0;
+int switching_res_from = 0;
+
+void* alloc_img() {
+    if(switching_res_from) {
+        for(int i = 0; i < P120_IMGS; i++) {
+            if(img_used[i]) return NULL;
+        }
+        switching_res_from = 0;
+    }
+    switch(gResolution) {
+        case 120:
+            for(int i = 0; i < P120_IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + (4 * 214 * 120 + 192) * i;
+                }
+            }
+            break;
+        case 144:
+            for(int i = 0; i < P144_IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + (4 * 256 * 144 + 192) * i;
+                }
+            }
+            break;
+        case 200:
+            for(int i = 0; i < P200_IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + (4 * 356 * 200 + 192) * i;
+                }
+            }
+            break;
+        case 240:
+            for(int i = 0; i < P240_IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + (4 * 427 * 240 + 192) * i;
+                }
+            }
+            break;
+        case 300:
+            for(int i = 0; i < P300_IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + (4 * 534 * 300 + 224) * i;
+                }
+            }
+            break;
+        case 360:
+            for(int i = 0; i < P360_IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + (4 * 640 * 360) * i;
+                }
+            }
+            break;
+        case 420:
+            for(int i = 0; i < P420_IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + (4 * 747 * 420 + 208) * i;
+                }
+            }
+            break;
+        case 480:
+            for(int i = 0; i < IMGS; i++) {
+                if(!img_used[i]) {
+                    img_used[i] = true;
+                    return img_heap + 4 * 854 * 480 * i;
+                }
+            }
+            break;
+    }
+    return NULL;
+}
+
+void free_img(void* img) {
+    switch(switching_res_from? switching_res_from: gResolution) {
+        case 120:
+            for(int i = 0; i < P120_IMGS; i++) {
+                if(img == img_heap + (4 * 214 * 120 + 192) * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+        case 144:
+            for(int i = 0; i < P144_IMGS; i++) {
+                if(img == img_heap + (4 * 256 * 144 + 192) * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+        case 200:
+            for(int i = 0; i < P200_IMGS; i++) {
+                if(img == img_heap + (4 * 356 * 200 + 192) * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+        case 240:
+            for(int i = 0; i < P240_IMGS; i++) {
+                if(img == img_heap + (4 * 427 * 240 + 192) * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+        case 300:
+            for(int i = 0; i < P300_IMGS; i++) {
+                if(img == img_heap + (4 * 534 * 300 + 224) * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+        case 360:
+            for(int i = 0; i < P360_IMGS; i++) {
+                if(img == img_heap + 4 * 640 * 360 * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+        case 420:
+            for(int i = 0; i < P420_IMGS; i++) {
+                if(img == img_heap + (4 * 747 * 420 + 208) * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+        case 480:
+            for(int i = 0; i < IMGS; i++) {
+                if(img == img_heap + 4 * 854 * 480 * i) {
+                    img_used[i] = false;
+                }
+            }
+            break;
+    }
+}
+
 bool copyBuffer(GX2ColorBuffer * sourceBuffer, GX2ColorBuffer * targetBuffer, uint32_t targetWidth, uint32_t targetHeight) {
     // Making sure the buffers are not NULL
     if (sourceBuffer != NULL && targetBuffer != NULL) {
+        void* img = alloc_img();
+        if(img == NULL) {
+            //DEBUG_FUNCTION_LINE("failed to allocate memory.\n");
+            return false;
+        }
         targetBuffer->surface.use =         (GX2SurfaceUse) (GX2_SURFACE_USE_COLOR_BUFFER | GX2_SURFACE_USE_TEXTURE);
         targetBuffer->surface.dim =         GX2_SURFACE_DIM_TEXTURE_2D;
         targetBuffer->surface.width =       targetWidth;
@@ -43,11 +190,7 @@ bool copyBuffer(GX2ColorBuffer * sourceBuffer, GX2ColorBuffer * targetBuffer, ui
         GX2InitColorBufferRegs(targetBuffer);
 
         // Let's allocate the memory.
-        targetBuffer->surface.image = memalign(targetBuffer->surface.alignment,targetBuffer->surface.imageSize);
-        if(targetBuffer->surface.image == NULL) {
-            DEBUG_FUNCTION_LINE("failed to allocate memory.\n");
-            return false;
-        }
+        targetBuffer->surface.image = img;
         //DEBUG_FUNCTION_LINE("Allocated image data buffer. data %08X  size %08X \n",targetBuffer->surface.image,targetBuffer->surface.imageSize);
 
         GX2Invalidate(GX2_INVALIDATE_MODE_CPU, targetBuffer->surface.image, targetBuffer->surface.imageSize);
@@ -59,30 +202,7 @@ bool copyBuffer(GX2ColorBuffer * sourceBuffer, GX2ColorBuffer * targetBuffer, ui
                            &targetBuffer->surface, 0, 0);
         } else {
             // If AA is enabled, we need to resolve the AA buffer.
-            GX2Surface tempSurface;
-            tempSurface = sourceBuffer->surface;
-            tempSurface.aa = GX2_AA_MODE1X;
-            GX2CalcSurfaceSizeAndAlignment(&tempSurface);
-
-            tempSurface.image = memalign(tempSurface.alignment,tempSurface.imageSize);
-            if(tempSurface.image == NULL) {
-                DEBUG_FUNCTION_LINE("failed to allocate data AA.\n");
-                if(targetBuffer->surface.image != NULL) {
-                    free(targetBuffer->surface.image);
-                    targetBuffer->surface.image = NULL;
-                }
-                return false;
-            }
-            GX2ResolveAAColorBuffer(sourceBuffer,&tempSurface, 0, 0);
-            GX2CopySurface(&tempSurface, 0, 0,&targetBuffer->surface, 0, 0);
-
-            // Sync CPU and GPU
-            GX2DrawDone();
-
-            if(tempSurface.image != NULL) {
-                free(tempSurface.image);
-                tempSurface.image = NULL;
-            }
+            GX2ResolveAAColorBuffer(sourceBuffer,&targetBuffer->surface, 0, 0);
         }
         return true;
     } else {
@@ -94,12 +214,19 @@ bool copyBuffer(GX2ColorBuffer * sourceBuffer, GX2ColorBuffer * targetBuffer, ui
 uint32_t frame_counter = 0;
 uint32_t frame_counter_skipped = 0;
 int32_t curQuality = 50;
-int32_t minQuality = 40;
-int32_t maxQuality = 85;
-int32_t stepQuality = 1;
-int32_t maxFrameDropsQuality = 20;
+int32_t stepQuality = 2;
+int32_t maxFrameDropsQuality = 5;
 int32_t minFrameDropsQuality = 95;
 
+void free_buf(GX2ColorBuffer* buf) {
+    if(buf->surface.image != NULL) {
+        free_img(buf->surface.image);
+    }
+    if(buf != NULL) {
+        free(buf);
+        buf = NULL;
+    }
+}
 
 bool streamVideo(GX2ColorBuffer *srcBuffer) {
     if(srcBuffer == NULL) {
@@ -120,94 +247,67 @@ bool streamVideo(GX2ColorBuffer *srcBuffer) {
 
     // keep dimensions
 
-    uint32_t width = 640/2;
-    uint32_t height = 360/2;
-
-    if(gResolution == WUPS_STREAMING_RESOLUTION_480P) {
-        width = 854;
-        height = 480;
-    } else  if(gResolution == WUPS_STREAMING_RESOLUTION_360P) {
-        width = 640;
-        height = 360;
-    } else {
-
-    }
+    uint32_t height = gResolution;
+    uint32_t width = (height * 16 + 8) / 9;
+    frame_counter++;
 
     bool valid = copyBuffer(srcBuffer,colorBuffer,width,height);
     if(!valid) {
-        DEBUG_FUNCTION_LINE("Copy buffer failed.\n");
-        if(colorBuffer->surface.image != NULL) {
-            free(colorBuffer->surface.image);
-            colorBuffer->surface.image = NULL;
-        }
-        if(colorBuffer != NULL) {
-            free(colorBuffer);
-            colorBuffer = NULL;
-        }
-        return false;
-    }
-    //DEBUG_FUNCTION_LINE("Copy buffer was successful.\n");
-
-    // Flush out destinations caches
-    GX2Invalidate(GX2_INVALIDATE_MODE_COLOR_BUFFER, colorBuffer->surface.image,colorBuffer->surface.imageSize);
-
-    // Wait for GPU to finish
-    GX2DrawDone();
-
-    DCFlushRange(colorBuffer,sizeof(GX2ColorBuffer));
-    DCFlushRange(&(colorBuffer->surface),sizeof(GX2Surface));
-
-    OSMessage message;
-    message.message = (void *) 0x1337;
-    message.args[1] = (uint32_t) colorBuffer;
-    frame_counter++;
-
-    bool result = true;
-
-    if(!EncodingHelper::addFSQueueMSG(message)) {
+        //DEBUG_FUNCTION_LINE("Copy buffer failed.\n");
+        alloc_fails++;
         frame_counter_skipped++;
+        free_buf(colorBuffer);
+    } else {
+        //DEBUG_FUNCTION_LINE("Copy buffer was successful.\n");
 
-        //DEBUG_FUNCTION_LINE("Adding to queue failed, free memory\n");
-        if(colorBuffer->surface.image != NULL) {
-            free(colorBuffer->surface.image);
-            colorBuffer->surface.image = NULL;
+        // Flush out destinations caches
+        GX2Invalidate(GX2_INVALIDATE_MODE_COLOR_BUFFER, colorBuffer->surface.image,colorBuffer->surface.imageSize);
+
+        // Wait for GPU to finish
+        //GX2DrawDone();
+
+        DCFlushRange(colorBuffer,sizeof(GX2ColorBuffer));
+
+        OSMessage message;
+        message.message = (void *) 0x1337;
+        message.args[1] = (uint32_t) colorBuffer;
+
+        if(!EncodingHelper::addFSQueueMSG(message)) {
+            frame_counter_skipped++;
+
+            //DEBUG_FUNCTION_LINE("Adding to queue failed, free memory\n");
+            free_buf(colorBuffer);
+            valid = false;
         }
-        if(colorBuffer != NULL) {
-            free(colorBuffer);
-            colorBuffer = NULL;
-        }
-        result = false;
     }
 
-    if(frame_counter % 60 == 0) { // Print this every second.
+    if(frame_counter == 60) { // Print this every second.
 
-        int32_t curRatio = (int32_t)100.f*(frame_counter_skipped*1.0f/frame_counter);
+        DEBUG_FUNCTION_LINE("Streaming at %d fps, skipped %d, fails %d, res %dp, quality %d%%\n",frame_counter-frame_counter_skipped, frame_counter_skipped, alloc_fails, height, curQuality);
+
         int32_t curQualityOld = curQuality;
-        if(curRatio > maxFrameDropsQuality) {  // Lower the quality if we drop more than [maxFrameDropsQuality]% of the frames.
-            curQuality -= (curRatio - maxFrameDropsQuality);
-        } else if(curRatio < minFrameDropsQuality) { // Increase the quality if we drop less than [minFrameDropsQuality]% of the frames.
+        if(frame_counter - frame_counter_skipped < gFps - 10) {  // Lower the quality if we drop more than [maxFrameDropsQuality]% of the frames.
+            curQuality -= stepQuality * 4;
+        } else if(frame_counter - frame_counter_skipped < gFps) {  // Lower the quality if we drop more than [maxFrameDropsQuality]% of the frames.
+            curQuality -= stepQuality;
+        } else if(frame_counter - frame_counter_skipped > gFps + 5) { // Increase the quality if we drop less than [minFrameDropsQuality]% of the frames.
             curQuality += stepQuality; // Increase the quality by [stepQuality]%
         }
 
         // Make sure to set the quality to at least [minQuality]%
-        if(curQuality < minQuality) {
-            curQuality = minQuality;
+        if(curQuality < gMinQuality) {
+            curQuality = gMinQuality;
         }
 
         // Make sure to set the quality to at most [maxQuality]%
-        if(curQuality >= maxQuality) {
-            curQuality = maxQuality;
+        if(curQuality >= gMaxQuality) {
+            curQuality = gMaxQuality;
         }
-
-        DEBUG_FUNCTION_LINE("Streaming at %d fps\n",frame_counter-frame_counter_skipped);
 
         frame_counter = 0;
         frame_counter_skipped = 0;
-
-        if(curQualityOld != curQuality) {
-            DEBUG_FUNCTION_LINE("Quality is now at %d%%\n",curQuality);
-        }
+        alloc_fails = 0;
     }
 
-    return result;
+    return valid;
 }

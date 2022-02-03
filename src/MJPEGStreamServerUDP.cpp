@@ -100,7 +100,6 @@ void MJPEGStreamServerUDP::DoAsyncThreadInternal(CThread *thread) {
         }
 
         DCFlushRange(&message,sizeof(OSMessage));
-
         JpegInformation * info = (JpegInformation *) message.args[0];
         if(info != NULL) {
             //DEBUG_FUNCTION_LINE("GOT FRAME INFO! %08X\n",info);
@@ -138,9 +137,9 @@ bool MJPEGStreamServerUDP::streamJPEG(JpegInformation * info) {
 }
 
 void MJPEGStreamServerUDP::sendJPEG(uint8_t * buffer, uint64_t size) {
-    uint32_t crcValue = crc32_crc(&crc32Buffer,buffer, size);
+    //uint32_t crcValue = crc32_crc(&crc32Buffer,buffer, size);
 
-    sendData((uint8_t*)&crcValue, sizeof(crcValue));
+    //sendData((uint8_t*)&crcValue, sizeof(crcValue));
     sendData((uint8_t*)&size, sizeof(size));
     sendData((uint8_t*)buffer, size);
 }

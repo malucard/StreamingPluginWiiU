@@ -14,7 +14,7 @@ DECL_FUNCTION(void, GX2CopyColorBufferToScanBuffer, const GX2ColorBuffer *colorB
         if(gScreen == WUPS_STREAMING_SCREEN_TV){
             use_scan_target = 1;
         }
-        if(scan_target == use_scan_target  /*&&  (count++ % 4 == 0)*/  && colorBuffer != NULL ) {
+        if(scan_target == use_scan_target  &&  (count++ % (60 / gFps) == 0)  && colorBuffer != NULL ) {
             count = 0;
             streamVideo((GX2ColorBuffer *)colorBuffer);
         }

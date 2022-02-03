@@ -27,6 +27,7 @@ public:
     }
 
     virtual bool streamJPEG(JpegInformation * info) = 0;
+    virtual bool streamJPEGThreaded(JpegInformation * info) = 0;
 };
 
 #endif //_MJPEG_STREAM_SERVER_WINDOW_H_
